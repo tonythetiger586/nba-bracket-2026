@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>2026 NBA Playoff Bracket</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d1117;
+      color: #e6edf3;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      padding: 20px 12px 40px;
+    }
+
+    /* ── HEADER ─────────────────────────────────────────── */
+    .app-header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .app-title {
+      font-size: 1.9rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 4px;
+    }
+    .app-title .nba-red  { color: #c9082a; }
+    .app-title .nba-blue { color: #1d428a; }
+    .app-subtitle {
+      font-size: 0.8rem;
+      color: #8b949e;
+      margin-bottom: 12px;
+    }
+    .share-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #1d428a;
+      color: #fff;
+      border: none;
+      padding: 8px 18px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .share-btn:hover   { background: #2756b0; }
+    .share-btn.copied  { background: #238636; }
+
+    /* ── PLAY-IN ─────────────────────────────────────────── */
+    .playin-section {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      padding: 14px 16px;
+      max-width: 860px;
+      margin: 0 auto 20px;
+    }
+    .playin-section h2 {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #8b949e;
+      margin-bottom: 12px;
+    }
+    .playin-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    @media (max-width: 500px) { .playin-grid { grid-template-columns: 1fr; } }
+    .playin-conf-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    .playin-conf-label.east { color: #c9082a; }
+    .playin-conf-label.west { color: #1d428a; }
+    .playin-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 5px;
+    }
+    .playin-seed-label {
+      font-size: 0.7rem;
+      color: #8b949e;
+      width: 44px;
+      flex-shrink: 0;
+    }
+    .playin-team-btn {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #e6edf3;
+      padding: 3px 9px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.72rem;
+      font-weight: 500;
+      transition: all 0.12s;
+      white-space: nowrap;
+    }
+    .playin-team-btn:hover         { border-color: #58a6ff; color: #58a6ff; }
+    .playin-team-btn.selected      { background: #1d428a;  border-color: #1d428a;  color: #fff; }
+    .playin-team-btn.selected.east { background: #7a0e1e;  border-color: #c9082a; }
+    .playin-team-btn.unavailable   { opacity: 0.25; cursor: not-allowed; pointer-events: none; }
+
+    /* ── BRACKET WRAPPER ─────────────────────────────────── */
+    .bracket-scroll {
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+    .bracket-outer {
+      min-width: 880px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    /* Round column labels */
+    .round-labels {
+      display: flex;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    .round-label {
+      text-align: center;
+      font-size: 0.62rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: #8b949e;
+    }
+    .rl-r1    { flex: 3.5; }
+    .rl-semi  { flex: 2.5; }
+    .rl-cf    { flex: 2; }
+    .rl-finals{ flex: 2; text-align: center; color: #c9a227; }
+
+    /* Main bracket flex row */
+    .bracket {
+      display: flex;
+      align-items: center;
+      height: 460px;
+      gap: 0;
+    }
+
+    /* ── ROUND COLUMNS ───────────────────────────────────── */
+    .round-col {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-around;
+      align-self: stretch;
+    }
+    .rc-r1   { flex: 3.5; }
+    .rc-semi { flex: 2.5; }
+    .rc-cf   { flex: 2; }
+    .rc-finals {
+      flex: 2;
+      justify-content: center;
+    }
+
+    /* Connector strips between columns */
+    .connector {
+      align-self: stretch;
+      flex: 0 0 10px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* ── MATCHUP CARDS ───────────────────────────────────── */
+    .matchup {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      overflow: hidden;
+      margin: 3px 2px;
+      flex-shrink: 0;
+    }
+    .matchup.finals-card {
+      border-color: #c9a227;
+      box-shadow: 0 0 10px rgba(201,162,39,0.15);
+    }
+
+    /* Team row inside matchup */
+    .team-row {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 8px;
+      min-height: 28px;
+      cursor: pointer;
+      border-bottom: 1px solid #21262d;
+      transition: background 0.12s;
+      font-size: 0.76rem;
+    }
+    .team-row:last-child { border-bottom: none; }
+    .team-row:hover:not(.tbd):not(.no-click) { background: #21262d; }
+
+    .team-row.winner {
+      background: #0d2137;
+      color: #79c0ff;
+      font-weight: 700;
+    }
+    .team-row.winner.east-winner {
+      background: #2a0a10;
+      color: #ff9ea8;
+    }
+    .team-row.loser  { opacity: 0.28; }
+    .team-row.tbd    { color: #484f58; cursor: default; font-style: italic; }
+    .team-row.no-click { cursor: default; }
+
+    .seed-num {
+      font-size: 0.6rem;
+      color: #8b949e;
+      width: 10px;
+      flex-shrink: 0;
+      text-align: center;
+    }
+    .team-abbr {
+      font-weight: 600;
+      flex: 0 0 auto;
+      letter-spacing: 0.3px;
+    }
+    .team-name-full {
+      font-size: 0.65rem;
+      color: #8b949e;
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .team-row.winner .team-name-full { color: #4a90d9; }
+    .team-row.winner.east-winner .team-name-full { color: #d97070; }
+
+    /* Trophy for champion */
+    .champion-badge {
+      text-align: center;
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: #c9a227;
+      padding: 4px 8px;
+      background: #1a1506;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    /* ── CONNECTOR LINE DRAWING ──────────────────────────── */
+    /* We draw bracket lines using the connector divs */
+    .connector-lines {
+      position: relative;
+      flex: 0 0 14px;
+      align-self: stretch;
+      overflow: visible;
+    }
+    .connector-lines svg {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      overflow: visible;
+    }
+
+    /* Reset button */
+    .reset-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: transparent;
+      border: 1px solid #30363d;
+      color: #8b949e;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      cursor: pointer;
+      margin-left: 8px;
+      transition: all 0.12s;
+    }
+    .reset-btn:hover { border-color: #c9082a; color: #c9082a; }
+
+    .action-bar {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .progress-bar-wrap {
+      text-align: center;
+      margin-bottom: 6px;
+      font-size: 0.72rem;
+      color: #8b949e;
+    }
+    .progress-inner {
+      display: inline-block;
+      background: #21262d;
+      border-radius: 10px;
+      overflow: hidden;
+      width: 200px;
+      height: 6px;
+      vertical-align: middle;
+      margin: 0 6px;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #1d428a, #c9082a);
+      border-radius: 10px;
+      transition: width 0.3s;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    /* ─────────────────────────────────────────────────────────────
+       DATA
+    ───────────────────────────────────────────────────────────── */
+    const WEST_SEEDS = [
+      { seed: 1, name: "Oklahoma City Thunder", abbr: "OKC" },
+      { seed: 2, name: "San Antonio Spurs",     abbr: "SAS" },
+      { seed: 3, name: "Denver Nuggets",         abbr: "DEN" },
+      { seed: 4, name: "Los Angeles Lakers",     abbr: "LAL" },
+      { seed: 5, name: "Houston Rockets",        abbr: "HOU" },
+      { seed: 6, name: "Minnesota Timberwolves", abbr: "MIN" },
+    ];
+    const EAST_SEEDS = [
+      { seed: 1, name: "Detroit Pistons",     abbr: "DET" },
+      { seed: 2, name: "Boston Celtics",      abbr: "BOS" },
+      { seed: 3, name: "New York Knicks",     abbr: "NYK" },
+      { seed: 4, name: "Cleveland Cavaliers", abbr: "CLE" },
+      { seed: 5, name: "Toronto Raptors",     abbr: "TOR" },
+      { seed: 6, name: "Atlanta Hawks",       abbr: "ATL" },
+    ];
+    const WEST_PLAYIN = [
+      { seed: 7, name: "Phoenix Suns",           abbr: "PHX" },
+      { seed: 8, name: "Portland Trail Blazers", abbr: "POR" },
+      { seed: 9, name: "Los Angeles Clippers",   abbr: "LAC" },
+      { seed: 10, name: "Golden State Warriors", abbr: "GSW" },
+    ];
+    const EAST_PLAYIN = [
+      { seed: 7,  name: "Philadelphia 76ers", abbr: "PHI" },
+      { seed: 8,  name: "Orlando Magic",       abbr: "ORL" },
+      { seed: 9,  name: "Charlotte Hornets",   abbr: "CHA" },
+      { seed: 10, name: "Miami Heat",          abbr: "MIA" },
+    ];
+
+    const ALL_TEAMS = {};
+    [...WEST_SEEDS, ...EAST_SEEDS, ...WEST_PLAYIN, ...EAST_PLAYIN].forEach(t => {
+      ALL_TEAMS[t.name] = t;
+    });
+
+    function lookupTeam(name) {
+      return ALL_TEAMS[name] || { name, abbr: name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,3), seed: null };
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       STATE ENCODING / DECODING
+    ───────────────────────────────────────────────────────────── */
+    const EMPTY_PICKS = {
+      w0: null, w1: null, w2: null, w3: null,
+      ws0: null, ws1: null,
+      wcf: null,
+      e0: null, e1: null, e2: null, e3: null,
+      es0: null, es1: null,
+      ecf: null,
+      f: null,
+    };
+
+    function encodeState(s) {
+      try { return btoa(JSON.stringify(s)); } catch { return ''; }
+    }
+    function decodeState(str) {
+      try { return JSON.parse(atob(str)); } catch { return null; }
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       BRACKET LOGIC
+    ───────────────────────────────────────────────────────────── */
+    // Build 8-team arrays for each conference
+    function buildConf(seeds6, playin7, playin8) {
+      const t7 = playin7 ? { ...lookupTeam(playin7), seed: 7 } : null;
+      const t8 = playin8 ? { ...lookupTeam(playin8), seed: 8 } : null;
+      return [...seeds6, t7, t8]; // indices 0-7 = seeds 1-8
+    }
+
+    // R1 matchup order (top→bottom in bracket): [1v8, 4v5, 2v7, 3v6]
+    function r1Matchups(teams) {
+      return [
+        [teams[0], teams[7]], // 1v8
+        [teams[3], teams[4]], // 4v5
+        [teams[1], teams[6]], // 2v7
+        [teams[2], teams[5]], // 3v6
+      ];
+    }
+
+    // Downstream invalidation map
+    const DOWNSTREAM = {
+      w0: ['ws0'], w1: ['ws0'], w2: ['ws1'], w3: ['ws1'],
+      ws0: ['wcf'], ws1: ['wcf'],
+      wcf: ['f'],
+      e0: ['es0'], e1: ['es0'], e2: ['es1'], e3: ['es1'],
+      es0: ['ecf'], es1: ['ecf'],
+      ecf: ['f'],
+      f: [],
+    };
+    function clearDownstream(key, picks) {
+      (DOWNSTREAM[key] || []).forEach(k => {
+        picks[k] = null;
+        clearDownstream(k, picks);
+      });
+    }
+
+    // For a given matchup key, return the two team objects (or null)
+    function getMatchupTeams(key, picks, wTeams, eTeams) {
+      const rm = { w: r1Matchups(wTeams), e: r1Matchups(eTeams) };
+      const p = name => name ? { ...lookupTeam(name) } : null;
+      switch(key) {
+        case 'w0': return rm.w[0]; case 'w1': return rm.w[1];
+        case 'w2': return rm.w[2]; case 'w3': return rm.w[3];
+        case 'ws0': return [p(picks.w0), p(picks.w1)];
+        case 'ws1': return [p(picks.w2), p(picks.w3)];
+        case 'wcf': return [p(picks.ws0), p(picks.ws1)];
+        case 'e0': return rm.e[0]; case 'e1': return rm.e[1];
+        case 'e2': return rm.e[2]; case 'e3': return rm.e[3];
+        case 'es0': return [p(picks.e0), p(picks.e1)];
+        case 'es1': return [p(picks.e2), p(picks.e3)];
+        case 'ecf': return [p(picks.es0), p(picks.es1)];
+        case 'f':   return [p(picks.wcf), p(picks.ecf)];
+        default: return [null, null];
+      }
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       COMPONENTS
+    ───────────────────────────────────────────────────────────── */
+
+    function Matchup({ matchupKey, teams, winner, onPick, isFinals, side }) {
+      const [a, b] = teams || [null, null];
+      const hasWinner = !!winner;
+
+      function rowClass(team) {
+        if (!team) return 'team-row tbd';
+        if (!hasWinner) return 'team-row';
+        if (team.name === winner) return `team-row winner${isFinals || side === 'east' ? ' east-winner' : ''}`;
+        return 'team-row loser';
+      }
+
+      function handleClick(team) {
+        if (!team || !a || !b) return;
+        onPick(matchupKey, team.name);
+      }
+
+      return (
+        <div className={`matchup${isFinals ? ' finals-card' : ''}`}>
+          {isFinals && winner && (
+            <div className="champion-badge">🏆 2026 NBA Champion</div>
+          )}
+          <div className={rowClass(a)} onClick={() => handleClick(a)}>
+            {a ? (
+              <>
+                <span className="seed-num">{a.seed}</span>
+                <span className="team-abbr">{a.abbr}</span>
+                <span className="team-name-full">{a.name}</span>
+              </>
+            ) : (
+              <span style={{paddingLeft:4}}>TBD</span>
+            )}
+          </div>
+          <div className={rowClass(b)} onClick={() => handleClick(b)}>
+            {b ? (
+              <>
+                <span className="seed-num">{b.seed}</span>
+                <span className="team-abbr">{b.abbr}</span>
+                <span className="team-name-full">{b.name}</span>
+              </>
+            ) : (
+              <span style={{paddingLeft:4}}>TBD</span>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       CONNECTOR SVG — draws bracket lines between rounds
+    ───────────────────────────────────────────────────────────── */
+    function ConnectorSVG({ count, direction }) {
+      // count: number of matchups in the left round (from which lines emerge)
+      // direction: 'right' (west going center) | 'left' (east going center)
+      // We draw 'count/2' bracket shapes, each connecting 2 matchups to 1
+      const containerRef = useRef(null);
+      const [dims, setDims] = useState({ w: 14, h: 460 });
+
+      useEffect(() => {
+        function measure() {
+          if (containerRef.current) {
+            const r = containerRef.current.getBoundingClientRect();
+            setDims({ w: r.width || 14, h: r.height || 460 });
+          }
+        }
+        measure();
+        window.addEventListener('resize', measure);
+        return () => window.removeEventListener('resize', measure);
+      }, []);
+
+      const { w, h } = dims;
+      const pairs = count / 2;
+      const pairH = h / pairs;
+      const lines = [];
+
+      for (let i = 0; i < pairs; i++) {
+        const topY    = pairH * i + pairH * 0.25;
+        const botY    = pairH * i + pairH * 0.75;
+        const midY    = (topY + botY) / 2;
+        const lineX   = direction === 'right' ? w - 1 : 1;
+        const horizX0 = direction === 'right' ? 0 : w;
+        const horizX1 = lineX;
+
+        lines.push(
+          <g key={i} stroke="#30363d" strokeWidth="1.5" fill="none">
+            <line x1={horizX0} y1={topY} x2={horizX1} y2={topY} />
+            <line x1={horizX0} y1={botY} x2={horizX1} y2={botY} />
+            <line x1={lineX} y1={topY} x2={lineX} y2={botY} />
+          </g>
+        );
+      }
+
+      return (
+        <div ref={containerRef} className="connector-lines" style={{ flex: '0 0 16px' }}>
+          <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">{lines}</svg>
+        </div>
+      );
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       PLAY-IN PICKER
+    ───────────────────────────────────────────────────────────── */
+    function PlayInPicker({ playIn, onPick }) {
+      function confPicker(conf, seeds, label, color) {
+        const key7 = conf + '7', key8 = conf + '8';
+        const sel7 = playIn[key7], sel8 = playIn[key8];
+
+        return (
+          <div>
+            <div className={`playin-conf-label ${conf}`}>{label} Conference</div>
+            <div className="playin-row">
+              <span className="playin-seed-label">7th Seed:</span>
+              {seeds.map(t => (
+                <button
+                  key={t.name}
+                  className={`playin-team-btn${sel7 === t.name ? ' selected' + (conf==='east'?' east':'') : ''}${sel8 === t.name ? ' unavailable' : ''}`}
+                  onClick={() => onPick(conf, 7, t.name)}
+                >
+                  {t.abbr}
+                </button>
+              ))}
+            </div>
+            <div className="playin-row">
+              <span className="playin-seed-label">8th Seed:</span>
+              {seeds.map(t => (
+                <button
+                  key={t.name}
+                  className={`playin-team-btn${sel8 === t.name ? ' selected' + (conf==='east'?' east':'') : ''}${sel7 === t.name ? ' unavailable' : ''}`}
+                  onClick={() => onPick(conf, 8, t.name)}
+                >
+                  {t.abbr}
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="playin-section">
+          <h2>🎟 Play-In Tournament — Pick your 7 &amp; 8 seeds</h2>
+          <div className="playin-grid">
+            {confPicker('west', WEST_PLAYIN, 'Western', 'blue')}
+            {confPicker('east', EAST_PLAYIN, 'Eastern', 'red')}
+          </div>
+          <div style={{ marginTop: 10, fontSize: '0.68rem', color: '#484f58' }}>
+            West Play-In: #7 Suns vs #8 Trail Blazers | #9 Clippers vs #10 Warriors &nbsp;•&nbsp;
+            East Play-In: #7 76ers vs #8 Magic | #9 Hornets vs #10 Heat
+          </div>
+        </div>
+      );
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       MAIN APP
+    ───────────────────────────────────────────────────────────── */
+    function App() {
+      const [playIn, setPlayIn] = useState({ west7: null, west8: null, east7: null, east8: null });
+      const [picks, setPicks]   = useState({ ...EMPTY_PICKS });
+      const [copied, setCopied] = useState(false);
+
+      // Load from URL hash
+      useEffect(() => {
+        const hash = window.location.hash.slice(1);
+        if (hash) {
+          const d = decodeState(hash);
+          if (d) {
+            if (d.playIn) setPlayIn(d.playIn);
+            if (d.picks)  setPicks({ ...EMPTY_PICKS, ...d.picks });
+          }
+        }
+      }, []);
+
+      // Sync state to URL
+      useEffect(() => {
+        const encoded = encodeState({ playIn, picks });
+        if (encoded) window.history.replaceState(null, '', '#' + encoded);
+      }, [playIn, picks]);
+
+      function handlePlayIn(conf, seedNum, teamName) {
+        setPlayIn(prev => {
+          const k7 = conf + '7', k8 = conf + '8';
+          const next = { ...prev };
+          if (seedNum === 7) {
+            next[k7] = teamName;
+            if (next[k8] === teamName) next[k8] = null;
+          } else {
+            next[k8] = teamName;
+            if (next[k7] === teamName) next[k7] = null;
+          }
+          return next;
+        });
+        // Reset all bracket picks since seeds changed
+        setPicks({ ...EMPTY_PICKS });
+      }
+
+      function handlePick(key, teamName) {
+        setPicks(prev => {
+          const next = { ...prev, [key]: teamName };
+          clearDownstream(key, next);
+          return next;
+        });
+      }
+
+      function handleReset() {
+        setPicks({ ...EMPTY_PICKS });
+        setPlayIn({ west7: null, west8: null, east7: null, east8: null });
+      }
+
+      function handleShare() {
+        navigator.clipboard.writeText(window.location.href).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2500);
+        }).catch(() => {
+          prompt('Copy this link:', window.location.href);
+        });
+      }
+
+      const wTeams = buildConf(WEST_SEEDS, playIn.west7, playIn.west8);
+      const eTeams = buildConf(EAST_SEEDS, playIn.east7, playIn.east8);
+
+      // Build matchup data for every series
+      function mu(key) {
+        return {
+          key,
+          teams: getMatchupTeams(key, picks, wTeams, eTeams),
+          winner: picks[key],
+        };
+      }
+
+      const westR1   = [mu('w0'), mu('w1'), mu('w2'), mu('w3')];
+      const westSemi = [mu('ws0'), mu('ws1')];
+      const westCF   = [mu('wcf')];
+      const eastR1   = [mu('e0'), mu('e1'), mu('e2'), mu('e3')];
+      const eastSemi = [mu('es0'), mu('es1')];
+      const eastCF   = [mu('ecf')];
+      const finals   = mu('f');
+
+      // Progress count
+      const totalSeries = 15;
+      const filled = Object.values(picks).filter(Boolean).length;
+
+      function RoundCol({ matchups, colClass, isFinals, side }) {
+        return (
+          <div className={`round-col ${colClass}`}>
+            {matchups.map(m => (
+              <Matchup
+                key={m.key}
+                matchupKey={m.key}
+                teams={m.teams}
+                winner={m.winner}
+                onPick={handlePick}
+                isFinals={isFinals}
+                side={side}
+              />
+            ))}
+          </div>
+        );
+      }
+
+      return (
+        <div>
+          <div className="app-header">
+            <div className="app-title">
+              <span className="nba-red">2026 NBA</span>{' '}
+              <span className="nba-blue">Playoff Bracket</span>
+            </div>
+            <div className="app-subtitle">Click a team to pick them to advance. Share your bracket with friends!</div>
+            <div className="action-bar">
+              <button className={`share-btn${copied ? ' copied' : ''}`} onClick={handleShare}>
+                {copied ? '✓ Copied!' : '🔗 Share Bracket'}
+              </button>
+              <button className="reset-btn" onClick={handleReset}>↺ Reset</button>
+            </div>
+            <div className="progress-bar-wrap">
+              <span>{filled}/{totalSeries} series picked</span>
+              <span className="progress-inner">
+                <span className="progress-fill" style={{ width: `${(filled/totalSeries)*100}%` }} />
+              </span>
+            </div>
+          </div>
+
+          <PlayInPicker playIn={playIn} onPick={handlePlayIn} />
+
+          <div className="bracket-scroll">
+            <div className="bracket-outer">
+              {/* Column labels */}
+              <div className="round-labels">
+                <div className="round-label rl-r1">West First Round</div>
+                <div style={{flex:'0 0 16px'}} />
+                <div className="round-label rl-semi">W. Semis</div>
+                <div style={{flex:'0 0 16px'}} />
+                <div className="round-label rl-cf">W. Finals</div>
+                <div style={{flex:'0 0 16px'}} />
+                <div className="round-label rl-finals">NBA Finals</div>
+                <div style={{flex:'0 0 16px'}} />
+                <div className="round-label rl-cf">E. Finals</div>
+                <div style={{flex:'0 0 16px'}} />
+                <div className="round-label rl-semi">E. Semis</div>
+                <div style={{flex:'0 0 16px'}} />
+                <div className="round-label rl-r1">East First Round</div>
+              </div>
+
+              {/* Bracket */}
+              <div className="bracket">
+                {/* WEST R1 */}
+                <RoundCol matchups={westR1} colClass="rc-r1" side="west" />
+                <ConnectorSVG count={4} direction="right" />
+
+                {/* WEST SEMIS */}
+                <RoundCol matchups={westSemi} colClass="rc-semi" side="west" />
+                <ConnectorSVG count={2} direction="right" />
+
+                {/* WEST CONF FINALS */}
+                <RoundCol matchups={westCF} colClass="rc-cf" side="west" />
+                <ConnectorSVG count={1} direction="right" />
+
+                {/* NBA FINALS */}
+                <div className="round-col rc-finals">
+                  <Matchup
+                    matchupKey={finals.key}
+                    teams={finals.teams}
+                    winner={finals.winner}
+                    onPick={handlePick}
+                    isFinals={true}
+                    side="finals"
+                  />
+                </div>
+
+                <ConnectorSVG count={1} direction="left" />
+                {/* EAST CONF FINALS */}
+                <RoundCol matchups={eastCF} colClass="rc-cf" side="east" />
+                <ConnectorSVG count={2} direction="left" />
+
+                {/* EAST SEMIS */}
+                <RoundCol matchups={eastSemi} colClass="rc-semi" side="east" />
+                <ConnectorSVG count={4} direction="left" />
+
+                {/* EAST R1 */}
+                <RoundCol matchups={eastR1} colClass="rc-r1" side="east" />
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
