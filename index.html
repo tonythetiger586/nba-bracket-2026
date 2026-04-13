@@ -316,6 +316,55 @@
       border-radius: 10px;
       transition: width 0.3s;
     }
+
+    /* ── SCORING ─────────────────────────────────────────── */
+    .team-row.correct {
+      background: #0d2e1a;
+      color: #56d364;
+      font-weight: 700;
+    }
+    .team-row.correct .team-name-full { color: #3a9e50; }
+    .team-row.wrong {
+      opacity: 0.45;
+      text-decoration: line-through;
+    }
+    .team-row.actual-winner {
+      background: #0d2e1a;
+      color: #56d364;
+      font-weight: 700;
+    }
+    .team-row.actual-winner .team-name-full { color: #3a9e50; }
+    .result-icon {
+      font-size: 0.65rem;
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+
+    .score-banner {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 7px 16px;
+      font-size: 0.82rem;
+      margin-bottom: 14px;
+    }
+    .score-num {
+      font-size: 1.3rem;
+      font-weight: 800;
+      color: #56d364;
+    }
+    .score-denom {
+      font-size: 0.75rem;
+      color: #8b949e;
+    }
+    .score-label {
+      font-size: 0.75rem;
+      color: #8b949e;
+    }
+    .score-banner.perfect .score-num { color: #c9a227; }
   </style>
 </head>
 <body>
@@ -445,26 +494,44 @@
        COMPONENTS
     ───────────────────────────────────────────────────────────── */
 
-    function Matchup({ matchupKey, teams, winner, onPick, isFinals, side }) {
+    function Matchup({ matchupKey, teams, winner, result, onPick, isFinals, side }) {
       const [a, b] = teams || [null, null];
       const hasWinner = !!winner;
+      const hasResult = !!result;
 
       function rowClass(team) {
         if (!team) return 'team-row tbd';
+        const userPicked = winner === team.name;
+        const isActual   = result === team.name;
+        if (hasResult) {
+          if (isActual && userPicked) return 'team-row correct';
+          if (isActual && !userPicked) return 'team-row actual-winner';
+          if (!isActual && userPicked) return 'team-row wrong';
+          return 'team-row loser';
+        }
         if (!hasWinner) return 'team-row';
-        if (team.name === winner) return `team-row winner${isFinals || side === 'east' ? ' east-winner' : ''}`;
+        if (userPicked) return `team-row winner${isFinals || side === 'east' ? ' east-winner' : ''}`;
         return 'team-row loser';
       }
 
+      function resultIcon(team) {
+        if (!team || !hasResult) return null;
+        if (winner === team.name && result === team.name) return <span className="result-icon">✅</span>;
+        if (winner === team.name && result !== team.name) return <span className="result-icon">❌</span>;
+        return null;
+      }
+
       function handleClick(team) {
-        if (!team || !a || !b) return;
+        if (!team || !a || !b || hasResult) return;
         onPick(matchupKey, team.name);
       }
 
       return (
         <div className={`matchup${isFinals ? ' finals-card' : ''}`}>
-          {isFinals && winner && (
-            <div className="champion-badge">🏆 2026 NBA Champion</div>
+          {isFinals && (result || winner) && (
+            <div className="champion-badge">
+              {result ? `🏆 ${result}` : `🏆 2026 NBA Champion`}
+            </div>
           )}
           <div className={rowClass(a)} onClick={() => handleClick(a)}>
             {a ? (
@@ -472,6 +539,7 @@
                 <span className="seed-num">{a.seed}</span>
                 <span className="team-abbr">{a.abbr}</span>
                 <span className="team-name-full">{a.name}</span>
+                {resultIcon(a)}
               </>
             ) : (
               <span style={{paddingLeft:4}}>TBD</span>
@@ -483,6 +551,7 @@
                 <span className="seed-num">{b.seed}</span>
                 <span className="team-abbr">{b.abbr}</span>
                 <span className="team-name-full">{b.name}</span>
+                {resultIcon(b)}
               </>
             ) : (
               <span style={{paddingLeft:4}}>TBD</span>
@@ -603,13 +672,23 @@
     function App() {
       const [playIn, setPlayIn] = useState({ west7: null, west8: null, east7: null, east8: null });
       const [picks, setPicks]   = useState({ ...EMPTY_PICKS });
+      const [results, setResults] = useState({});
       const [copied, setCopied] = useState(false);
 
-      // Load from URL hash
+      // Fetch official results
       useEffect(() => {
-        const hash = window.location.hash.slice(1);
-        if (hash) {
-          const d = decodeState(hash);
+        fetch('./results.json?t=' + Date.now())
+          .then(r => r.json())
+          .then(data => setResults(data))
+          .catch(() => {}); // silently skip if not available
+      }, []);
+
+      // Load from URL — supports both ?picks= (new) and # (old)
+      useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const encoded = params.get('picks') || window.location.hash.slice(1);
+        if (encoded) {
+          const d = decodeState(encoded);
           if (d) {
             if (d.playIn) setPlayIn(d.playIn);
             if (d.picks)  setPicks({ ...EMPTY_PICKS, ...d.picks });
@@ -617,10 +696,10 @@
         }
       }, []);
 
-      // Sync state to URL
+      // Sync state to URL as ?picks=
       useEffect(() => {
         const encoded = encodeState({ playIn, picks });
-        if (encoded) window.history.replaceState(null, '', '#' + encoded);
+        if (encoded) window.history.replaceState(null, '', '?picks=' + encoded);
       }, [playIn, picks]);
 
       function handlePlayIn(conf, seedNum, teamName) {
@@ -671,6 +750,7 @@
           key,
           teams: getMatchupTeams(key, picks, wTeams, eTeams),
           winner: picks[key],
+          result: results[key] || null,
         };
       }
 
@@ -682,8 +762,6 @@
       const eastCF   = [mu('ecf')];
       const finals   = mu('f');
 
-      // Progress count
-      const totalSeries = 15;
       const filled = Object.values(picks).filter(Boolean).length;
 
       function RoundCol({ matchups, colClass, isFinals, side }) {
@@ -695,6 +773,7 @@
                 matchupKey={m.key}
                 teams={m.teams}
                 winner={m.winner}
+                result={m.result}
                 onPick={handlePick}
                 isFinals={isFinals}
                 side={side}
@@ -703,6 +782,12 @@
           </div>
         );
       }
+
+      // Score calculation
+      const completedKeys = Object.keys(results).filter(k => results[k]);
+      const correctCount  = completedKeys.filter(k => picks[k] && picks[k] === results[k]).length;
+      const totalSeries   = 15;
+      const isPerfect     = completedKeys.length === totalSeries && correctCount === totalSeries;
 
       return (
         <div>
@@ -719,11 +804,23 @@
               <button className="reset-btn" onClick={handleReset}>↺ Reset</button>
             </div>
             <div className="progress-bar-wrap">
-              <span>{filled}/{totalSeries} series picked</span>
+              <span>{filled}/15 series picked</span>
               <span className="progress-inner">
-                <span className="progress-fill" style={{ width: `${(filled/totalSeries)*100}%` }} />
+                <span className="progress-fill" style={{ width: `${(filled/15)*100}%` }} />
               </span>
             </div>
+            {completedKeys.length > 0 && (
+              <div style={{display:'flex',justifyContent:'center'}}>
+                <div className={`score-banner${isPerfect ? ' perfect' : ''}`}>
+                  {isPerfect ? '🏆' : '🎯'}
+                  <span className="score-num">{correctCount}</span>
+                  <span className="score-denom">/ {completedKeys.length}</span>
+                  <span className="score-label">
+                    {isPerfect ? 'Perfect bracket!' : `correct${completedKeys.length < 15 ? ' so far' : ''}`}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
           <PlayInPicker playIn={playIn} onPick={handlePlayIn} />
@@ -767,6 +864,7 @@
                     matchupKey={finals.key}
                     teams={finals.teams}
                     winner={finals.winner}
+                    result={finals.result}
                     onPick={handlePick}
                     isFinals={true}
                     side="finals"
